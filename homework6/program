@@ -1,321 +1,399 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
+using System.IO;
 using System.Xml.Serialization;
 
-namespace ConsoleApp11
+
+
+namespace program
 {
-    
-    public class Order
+    public class OrderServiceSource
     {
-        public Order() { }
-        public int ID { get; set; }
-        public string Customer { get; set; }
-        private bool IsCompleted { get; set; }
-        public DateTime Time { get; set; }
-        public double TotalPrice { get; set; }
-        public List<OrderItem> orderitems;
-        public Order(int id, string customer, bool iscompleted,
-            DateTime time, List<OrderItem> items)
+        public class MatchException : Exception
         {
-            ID = id;
-            Customer = customer;
-            IsCompleted = iscompleted;
-            Time = time;
-            TotalPrice = 0;
-            foreach (OrderItem item in items)
-                TotalPrice += item.Price * item.Quantity;
-            orderitems = items;
-        }
-
-
-        public override string ToString()
-        {
-            StringBuilder all_items = new StringBuilder();
-            foreach (OrderItem oi in orderitems)
+            private int code;
+            public int Code { get => code; }
+            public MatchException(string message, int code) : base(message)
             {
-                all_items.Append(oi.ToString() + "\n");
+                this.code = code;
             }
-            return "ID: " + ID + "   " + "Created time: " + Time + "   " + "Customer's name: " + Customer 
-                + "\n" + all_items.ToString() + 
-                "Total price: " + TotalPrice + "\n" + "Completed: " + IsCompleted;
         }
 
-        public override int GetHashCode()
+        public class OrderService
         {
-            return HashCode.Combine(ID, Customer, IsCompleted, Time, orderitems);
-        }
+            private List<Order> orders;
+            public List<Order> Orders { get { return orders; } }
+            public int order_amount { get => orders.Count; }
 
-        public override bool Equals(object obj)
-        {
-            return obj is Order order &&
-                   ID == order.ID ;
-        }
-    }
-    public class OrderItem
-    {
-        public OrderItem() { }
-        public string Name { get; set; }
-        public int Quantity { get; set; }
-        public double Price { get; set; }
-        public OrderItem(string name, int number, double price)
-        {
-            Name = name;
-            Quantity = number;
-            Price = price;
-        }
-
-        public override string ToString()
-        {
-            return "Product name: " + Name + "   " + "Quantity: " + Quantity + "   Price: " + Price;
-        }
-        public override bool Equals(object obj)
-        {
-            return obj is OrderItem item &&
-                   Name == item.Name &&
-                   Quantity == item.Quantity &&
-                   Price == item.Price;
-        }
-
-        public override int GetHashCode()
-        {
-            return HashCode.Combine(Name, Quantity, Price);
-        }
-    }
-    public class OrderService
-    {
-        public List<Order> orders;
-        public OrderService()
-        {
-            orders = new List<Order>();
-        }
-        public bool addOrder(Order order)
-        {
-            foreach (Order o in orders)
+            public OrderService()
             {
-                if (o.Equals(order))
-                    return false;
+                orders = new List<Order>();
             }
-            orders.Add(order);
-            return true;
-        }
-        public bool deleteOrder(int id)
-        {
-            try
+
+            private bool CheckOrder(Order order)
             {
-                orders.Remove(orders.Where(p => p.ID == id).First());
-                return true;
-            }
-            catch
-            {
+                foreach (Order order_this in orders)
+                {
+                    if (order_this.Equals(order))
+                        return true;
+                }
                 return false;
             }
-        }
-        public bool updateOrder(int id, Order neworder)
-        {
-            try
+
+            private Order FindOrderID(int ID)
             {
-                int order_number = orders.FindIndex(o => o.ID == id);
-                orders[order_number] = neworder;
-                return true;
+                foreach (Order order_this in orders)
+                {
+                    if (order_this.ID == ID)
+                    {
+                        return order_this;
+                    }
+                }
+                return null;
             }
-            catch
+
+            public void AddOrder(Order order)
             {
-                return false;
+                if (CheckOrder(order))
+                {
+                    throw new MatchException("Add order match error!", 1);
+                }
+                orders.Add(new Order(order));
             }
-        }
-        public void sortOrder()
-        {
-            orders.Sort((o1, o2) => o1.ID - o2.ID);
-        }
-        public List<Order> searchOrder_byID(int id)
-        {
-            var query = orders.Where(o => o.ID == id);
-            return query.ToList();
-        }
-        public List<Order> searchOrder_byCustomer(string order_customer)
-        {
-            var query = orders.Where(o => o.Customer == order_customer).OrderBy(o => o.TotalPrice);
-            return query.ToList();
-        }
-        public List<Order> searchOrder_byTime(DateTime order_time)
-        {
-            var query = orders.Where(o => o.Time == order_time).OrderBy(o => o.TotalPrice);
-            return query.ToList();
-        }
-        public List<Order> PrintOrders()
-        {
-            return orders;
-        }
-        public void Export(string filename)
-        {
-            XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<Order>));
-            using (FileStream file = new FileStream(filename + ".xml", FileMode.Create))
-                xmlSerializer.Serialize(file, orders);
-        }
-        public void Import(string filename)
-        {
-            using (FileStream file = new FileStream(filename, FileMode.Open))
+
+            public void AddOrderItem(int ID, OrderItem orderitem)
+            {
+                Order order = FindOrderID(ID);
+                if (order == null)
+                {
+                    throw new MatchException("Order match error!", 0);
+                }
+                order.AddOrderItem(orderitem);
+            }
+
+            public void DeleteOrder(int ID)
+            {
+                Order order = FindOrderID(ID);
+                if (order == null)
+                {
+                    throw new MatchException("Delete order match error!", 2);
+                }
+                orders.Remove(order);
+            }
+
+            public void DeleteOrderItem(int Order_ID, int OrderItem_ID)
+            {
+                Order order = FindOrderID(Order_ID);
+                if (order == null)
+                {
+                    throw new MatchException("Order match error!", 0);
+                }
+                order.DeleteOrderItem(OrderItem_ID);
+            }
+
+            public void UpdateOrder(int ID, Order order)
+            {
+                DeleteOrder(ID);
+                AddOrder(order);
+            }
+
+            public void UpdateOrderItem(int Order_ID, int OrderItem_ID, OrderItem orderitem)
+            {
+                Order order = FindOrderID(Order_ID);
+                if (order == null)
+                {
+                    throw new MatchException("Order match error!", 0);
+                }
+                order.DeleteOrderItem(OrderItem_ID);
+                order.AddOrderItem(orderitem);
+            }
+
+            public Order FindOrder(int ID)
+            {
+                Order order = FindOrderID(ID);
+                if(order == null)
+                {
+                    throw new MatchException("Delete order match error!", 2);
+                }
+                return new Order(order);
+            }
+
+            public List<Order> FindOrder(Func<Order, bool> func)
+            {
+                var query = orders.Where(func).OrderBy(order => order.TotalPrice);
+                return query.ToList<Order>();
+            }
+
+            public List<Order> FindOrder(string CustomerName)
+            {
+                var query = orders.Where(order => order.CustomerName == CustomerName).OrderBy(order => order.TotalPrice);
+                return query.ToList<Order>();
+            }
+            
+            public OrderItem FindOrderItem(int Order_ID, int OrderItem_ID)
+            {
+                Order order = FindOrderID(Order_ID);
+                if (order == null)
+                {
+                    throw new MatchException("Order match error!", 0);
+                }
+                OrderItem orderitem = order.FindOrderItem(OrderItem_ID);
+                return orderitem;
+            }
+
+            public List<OrderItem> FindOrderItem(int Order_ID, Func<OrderItem, bool> func)
+            {
+                Order order = FindOrderID(Order_ID);
+                if (order == null)
+                {
+                    throw new MatchException("Order match error!", 0);
+                }
+                var query = order.orderitems.Where(func).OrderBy(orderitem => orderitem.Price * orderitem.Quantity);
+                return query.ToList<OrderItem>();
+            }
+            
+            public List<OrderItem> FindOrderItem(int Order_ID, string ProductName)
+            {
+                Order order = FindOrderID(Order_ID);
+                if (order == null)
+                {
+                    throw new MatchException("Order match error!", 0);
+                }
+                var query = order.orderitems.Where(orderitem => orderitem.ProductName == ProductName)
+                    .OrderBy(orderitem => orderitem.Price * orderitem.Quantity);
+                return query.ToList();
+            }
+            
+            public void SortOrder()
+            {
+                orders.Sort((order1, order2) => order1.ID - order2.ID);
+            }
+
+            public void SortOrder(Func<Order, Order, int> func)
+            {
+                orders.Sort((order1, order2) => func(order1, order2));
+            }
+
+            public Order GetFirst()
+            {
+                if (order_amount > 0)
+                    return new Order(orders[0]);
+                else
+                    return null;
+            }
+
+            public void Export(string Filename)
             {
                 XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<Order>));
-                List<Order> orderlist = (List<Order>)xmlSerializer.Deserialize(file);
-                foreach (Order o in orderlist){
-                    addOrder(o);
+                using (FileStream fs = new FileStream(Filename, FileMode.Create))
+                {
+                    xmlSerializer.Serialize(fs, orders);
                 }
-
             }
-                
+
+            public void Export()
+            {
+                XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<Order>));
+                using (FileStream fs = new FileStream("OrderList.xml", FileMode.Create))
+                {
+                    xmlSerializer.Serialize(fs, orders);
+                }
+            }
+
+            public void Import(string Filename)
+            {
+                XmlSerializer xmlSerializer = new XmlSerializer(typeof(List<Order>));
+                using (FileStream fs = new FileStream(Filename, FileMode.Open))
+                {
+                    orders = (List<Order>)xmlSerializer.Deserialize(fs);
+                }
+            }
         }
-    }
-    public class Program
-    {
+
+        [Serializable]
+        public class Order
+        {
+            public int ID { get; set; }
+            public string CustomerName { get; set; }
+            public double TotalPrice
+            {
+                get
+                {
+                    var query = from orderitem in orderitems
+                                select orderitem.Price * orderitem.Quantity;
+                    return query.Sum();
+                }
+            }
+            public List<OrderItem> orderitems;
+
+            [XmlIgnore]
+            public List<OrderItem> OrderItems { get { return orderitems; } }
+
+            public Order(int ID, string CustomerName)
+            {
+                this.ID = ID;
+                this.CustomerName = CustomerName;
+                orderitems = new List<OrderItem>();
+            }
+
+            public Order(Order order)
+            {
+                ID = order.ID;
+                CustomerName = order.CustomerName;
+                orderitems = new List<OrderItem>();
+                foreach (OrderItem orderItem in order.orderitems)
+                {
+                    orderitems.Add(new OrderItem(orderItem));
+                }
+            }
+
+            public Order()
+            {
+                orderitems = new List<OrderItem>();
+            }
+
+            public override bool Equals(object obj)
+            {
+                Order order = obj as Order;
+                return order != null && ID == order.ID;
+            }
+
+            public override int GetHashCode()
+            {
+                var hashCode = -221969603;
+                hashCode = hashCode * -1521134295 + ID.GetHashCode();
+                hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(CustomerName);
+                hashCode = hashCode * -1521134295 + TotalPrice.GetHashCode();
+                hashCode = hashCode * -1521134295 + EqualityComparer<List<OrderItem>>.Default.GetHashCode(orderitems);
+                return hashCode;
+            }
+
+            public override string ToString()
+            {
+                return $"Order_ID: {ID} CustomerName: {CustomerName} TotalPrice: {TotalPrice}";
+            }
+
+            private bool CheckOrderItem(OrderItem orderitem)
+            {
+                foreach (OrderItem orderitem_this in orderitems)
+                {
+                    if (orderitem_this.Equals(orderitem))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            private OrderItem FindOrderItemID(int ID)
+            {
+                foreach (OrderItem orderitem in orderitems)
+                {
+                    if (orderitem.ID == ID)
+                    {
+                        return orderitem;
+                    }
+                }
+                return null;
+            }
+            
+            public OrderItem FindOrderItem(int ID)
+            {
+                OrderItem orderitem = FindOrderItemID(ID);
+                if (orderitem == null)
+                {
+                    throw new MatchException("OrderItem match error!", 3);
+                }
+                return new OrderItem(orderitem);
+            }
+
+            public void AddOrderItem(OrderItem orderitem)
+            {
+                if (CheckOrderItem(orderitem))
+                {
+                    throw new MatchException("Add orderItem match error!", 4);
+                }
+                orderitems.Add(new OrderItem(orderitem));
+            }
+
+            public void DeleteOrderItem(int ID)
+            {
+                OrderItem orderitem = FindOrderItemID(ID);
+                if (orderitem == null)
+                {
+                    throw new MatchException("Delete orderItem match error!", 5);
+                }
+                orderitems.Remove(orderitem);
+            }
+        }
+
+        [Serializable]
+        public class OrderItem
+        {
+            public int ID { get; set; }
+            public string ProductName { get; set; }
+            public double Price { get; set; }
+            public int Quantity { get; set; }
+
+            public OrderItem() { }
+
+            public OrderItem(int ID, string ProductName, double Price, int Quantity)
+            {
+                this.ID = ID;
+                this.ProductName = ProductName;
+                this.Price = Price;
+                this.Quantity = Quantity;
+            }
+
+            public OrderItem(OrderItem orderitem)
+            {
+                ID = orderitem.ID;
+                ProductName = orderitem.ProductName;
+                Price = orderitem.Price;
+                Quantity = orderitem.Quantity;
+            }
+
+            public override bool Equals(object obj)
+            {
+                OrderItem orderitem = obj as OrderItem;
+                return orderitem != null && ID == orderitem.ID;
+            }
+
+            public override int GetHashCode()
+            {
+                var hashCode = -1799128887;
+                hashCode = hashCode * -1521134295 + ID.GetHashCode();
+                hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(ProductName);
+                hashCode = hashCode * -1521134295 + Price.GetHashCode();
+                hashCode = hashCode * -1521134295 + Quantity.GetHashCode();
+                return hashCode;
+            }
+
+            public override string ToString()
+            {
+                return $"OrderItem_ID: {ID} ProductName: {ProductName} Price: {Price} Quantity: {Quantity}";
+            }
+        }
+
         static void Main(string[] args)
         {
-            Console.WriteLine("Enter A/D/U/S/SID/SC/ST/C/P to select the service:\n" +
-                "A: add an order   D: delete an order   U:update an order   S: sort all orders\n" +
-                "SID: search orders by order's ID   SC: search orders by customer's name   " +
-                "ST: search orders by time\nP: Print all orders.\n" + "E: export in xml   I: import xml\n"+
-                "C: close the program");
-            OrderService service = new OrderService();
-            bool running = true;
-            while (running)
+            OrderService orderService = new OrderService();
+            Order order = new Order(0, "customer1");
+            Console.WriteLine(order.TotalPrice);
+            for(int i = 0; i < 10; i++)
             {
-
-                string op;
-                op = Console.ReadLine();
-                int order_number = -1;
-                switch (op)
-                {
-                    case "A":
-                        Console.WriteLine("Enter the order's ID: ");
-                        order_number = Int32.Parse(Console.ReadLine());
-                        List<OrderItem> items = new List<OrderItem>();
-                        Console.WriteLine("Enter the customer's name: ");
-                        string customer = Console.ReadLine();
-                        string nextitem = "Y";
-                        while (nextitem != "N")
-                        {
-                            string name, quantity, price;
-                            Console.WriteLine("Item's name: ");
-                            name = Console.ReadLine();
-                            Console.WriteLine("Item's quantity: ");
-                            quantity = Console.ReadLine();
-                            Console.WriteLine("Item's price:");
-                            price = Console.ReadLine();
-                            items.Add(new OrderItem(name, Int32.Parse(quantity), Double.Parse(price)));
-                            Console.WriteLine("Next item? (Y/N): ");
-                            nextitem = Console.ReadLine();
-                        }
-                        DateTime time;
-                        Console.WriteLine("Enter the time of this order: ");
-                        time = DateTime.Parse(Console.ReadLine());
-                        bool iscompleted = false;
-                        Console.WriteLine("Is this order completed? (Y/N) ");
-                        string ic = Console.ReadLine();
-                        if (ic == "Y") iscompleted = true;
-
-                        Order order = new Order(order_number, customer, iscompleted, time, items);
-                        if (!service.addOrder(order))
-                            Console.WriteLine("Already existed!");
-                        else
-                            Console.WriteLine("Succesfully created.");
-                        break;
-                    case "D":
-                        Console.WriteLine("Enter the order's ID: ");
-                        order_number = Int32.Parse(Console.ReadLine());
-                        if (!service.deleteOrder(order_number))
-                            Console.WriteLine("No matched order.");
-                        else
-                            Console.WriteLine("Successfully deleted.");
-                        break;
-                    case "U":
-                        Console.WriteLine("Enter the order's ID: ");
-                        order_number = Int32.Parse(Console.ReadLine());
-                        List<OrderItem> newitems = new List<OrderItem>();
-                        Console.WriteLine("Enter the customer's name: ");
-                        string newcustomer = Console.ReadLine();
-                        string newnextitem = "Y";
-                        while (newnextitem != "N")
-                        {
-                            string name, quantity, price;
-                            Console.WriteLine("Item's name: ");
-                            name = Console.ReadLine();
-                            Console.WriteLine("Item's quantity: ");
-                            quantity = Console.ReadLine();
-                            Console.WriteLine("Item's price:");
-                            price = Console.ReadLine();
-                            newitems.Add(new OrderItem(name, Int32.Parse(quantity), Double.Parse(price)));
-                            Console.WriteLine("Next item? (Y/N): ");
-                            newnextitem = Console.ReadLine();
-                        }
-                        DateTime newtime;
-                        Console.WriteLine("Enter the time of this order: ");
-                        newtime = DateTime.Parse(Console.ReadLine());
-                        bool newiscompleted = false;
-                        Console.WriteLine("Is this order completed? (Y/N) ");
-                        newiscompleted = bool.Parse(Console.ReadLine());
-
-                        Order neworder = new Order(order_number, newcustomer, newiscompleted, newtime, newitems);
-                        if (!service.updateOrder(order_number, neworder))
-                            Console.WriteLine("No matched order.");
-
-                        else
-                            Console.WriteLine("Successfully updated.");
-                        break;
-                    case "S":
-                        service.sortOrder();
-                        Console.WriteLine("Sorted.");
-                        break;
-                    case "SID":
-                        Console.WriteLine("Enter the order's ID: ");
-                        order_number = Int32.Parse(Console.ReadLine());
-                        List<Order> orders_found_byid = service.searchOrder_byID(order_number);
-                        if (orders_found_byid.Count == 0) Console.WriteLine("No matched order.");
-                        foreach (Order o in orders_found_byid)
-                            Console.WriteLine(o.ToString());
-                        break;
-                    case "SC":
-                        Console.WriteLine("Enter the customer's name: ");
-                        string order_customer = Console.ReadLine();
-                        List<Order> orders_found_bycustomer = service.searchOrder_byCustomer(order_customer);
-                        if (orders_found_bycustomer.Count == 0) Console.WriteLine("No matched order.");
-                        foreach (Order o in orders_found_bycustomer)
-                            Console.WriteLine(o.ToString());
-                        break;
-                    case "ST":
-                        Console.WriteLine("Enter the time: ");
-                        DateTime order_time = DateTime.Parse(Console.ReadLine());
-                        List<Order> orders_found_bytime = service.searchOrder_byTime(order_time);
-                        if (orders_found_bytime.Count == 0) Console.WriteLine("No matched order.");
-                        foreach (Order o in orders_found_bytime)
-                            Console.WriteLine(o.ToString());
-                        break;
-                    case "P":
-                        foreach (Order o in service.PrintOrders())
-                            Console.WriteLine(o.ToString());
-                        break;
-                    case "C":
-                        running = false;
-                        break;
-                    case "E":
-                        Console.WriteLine("Enter filename:");
-                        string filename = Console.ReadLine();
-                        service.Export(filename);
-                        break;
-                    case "I":
-                        Console.WriteLine("Enter filename:");
-                        string filename_in = Console.ReadLine();
-                        service.Import(filename_in);
-                        break;
-                    default:
-                        break;
-
-                }
-
-
+                order.AddOrderItem(new OrderItem(i, "product" + i, 300, 10));
             }
+            Console.WriteLine(order.TotalPrice);
+            orderService.AddOrder(order);
+            orderService.Export();
+            OrderService orderService_1 = new OrderService();
+            orderService_1.Import("OrderList.xml");
+            Console.WriteLine(orderService_1.GetFirst().ToString());
+            Console.ReadKey();
         }
     }
 }
