@@ -10,7 +10,7 @@ namespace GenericsChainlist
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("请输入用空格分隔的整数列表：");
+            Console.WriteLine("请输入整数列表：");
             string[] tmp_arr= Console.ReadLine().Split(" ");
             List<int> ls = new List<int>();
             int len = tmp_arr.Length;
